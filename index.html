@@ -60,8 +60,12 @@
         { id: 7, text: 'Zkontrolovat internet', completed: false, assignedTo: 'Radim' },
         { id: 8, text: 'Nastavit CS2 server', completed: false, assignedTo: null }
       ],
-      // Nový klíč pro individuální checklisty
-      individualChecklists: {}
+      // Individuální checklisty s podporou custom položek
+      individualChecklists: {},
+      // Nový klíč pro custom položky u každého uživatele
+      customChecklistItems: {},
+      // Nový klíč pro skryté defaultní položky u každého uživatele
+      hiddenDefaultItems: {}
     };
 
     // ---- HOOK: Realtime sync s Firebase ----
@@ -168,12 +172,77 @@
         saveToDB(updated);
       };
 
-      const resetChecklist = (user) => {
+      // Přidání custom položky do checklistu uživatele
+      const addChecklistItem = (user, label) => {
+        if (!label.trim()) return;
+        
+        const key = 'custom_' + Date.now();
+        const currentCustomItems = items.customChecklistItems?.[user] || {};
+        
         const updated = {
           ...items,
+          customChecklistItems: {
+            ...items.customChecklistItems,
+            [user]: {
+              ...currentCustomItems,
+              [key]: label.trim()
+            }
+          }
+        };
+        saveToDB(updated);
+      };
+
+      // Odstranění položky z checklistu (custom i defaultní)
+      const removeChecklistItem = (user, key, isDefault = false) => {
+        const currentCustomItems = items.customChecklistItems?.[user] || {};
+        const currentChecklist = items.individualChecklists?.[user] || {};
+        const currentHiddenItems = items.hiddenDefaultItems?.[user] || {};
+        
+        let updatedCustomItems = { ...currentCustomItems };
+        let updatedChecklist = { ...currentChecklist };
+        let updatedHiddenItems = { ...currentHiddenItems };
+        
+        if (isDefault) {
+          // Pro defaultní položky - přidáme ji do seznamu skrytých
+          updatedHiddenItems[key] = true;
+          // Odstraníme ze checklistu pokud byla zaškrtnutá
+          delete updatedChecklist[key];
+        } else {
+          // Pro custom položky - odstraníme ze seznamu custom položek
+          delete updatedCustomItems[key];
+          // Odstraníme i z checklistu pokud byla zaškrtnutá
+          delete updatedChecklist[key];
+        }
+        
+        const updated = {
+          ...items,
+          customChecklistItems: {
+            ...items.customChecklistItems,
+            [user]: updatedCustomItems
+          },
           individualChecklists: {
             ...items.individualChecklists,
-            [user]: {}
+            [user]: updatedChecklist
+          },
+          hiddenDefaultItems: {
+            ...items.hiddenDefaultItems,
+            [user]: updatedHiddenItems
+          }
+        };
+        saveToDB(updated);
+      };
+
+      // Obnovení skryté defaultní položky
+      const restoreDefaultItem = (user, key) => {
+        const currentHiddenItems = items.hiddenDefaultItems?.[user] || {};
+        const updatedHiddenItems = { ...currentHiddenItems };
+        delete updatedHiddenItems[key];
+        
+        const updated = {
+          ...items,
+          hiddenDefaultItems: {
+            ...items.hiddenDefaultItems,
+            [user]: updatedHiddenItems
           }
         };
         saveToDB(updated);
@@ -188,7 +257,9 @@
         cancelEdit,
         deleteItem,
         toggleChecklistItem,
-        resetChecklist
+        addChecklistItem,
+        removeChecklistItem,
+        restoreDefaultItem
       };
     }
 
@@ -371,20 +442,61 @@
 
     // ---- INDIVIDUAL CHECKLISTS ----
     const IndividualChecklist = memo(function IndividualChecklist({
-      member, checklist, onToggle, onReset
+      member, checklist, customItems, hiddenItems, onToggle, onAddItem, onRemoveItem, onRestoreItem
     }) {
+      const [newItemText, setNewItemText] = useState('');
+      const [showAddForm, setShowAddForm] = useState(false);
+
+      const handleAddItem = () => {
+        if (newItemText.trim()) {
+          onAddItem(member.name, newItemText.trim());
+          setNewItemText('');
+          setShowAddForm(false);
+        }
+      };
+
+      // Filtrujeme defaultní položky podle skrytých
+      const visibleDefaultItems = defaultChecklist.filter(item => !hiddenItems[item.key]);
+      const customItemsArray = Object.entries(customItems || {}).map(([key, label]) => ({ key, label, isCustom: true }));
+      
+      const allItems = [...visibleDefaultItems, ...customItemsArray];
+
       return (
         <div className="individual-checklist">
           <div className="individual-title">
             <Avatar photo={member.photo} avatar={member.avatar} className="person-avatar" />
             <span>{member.name}</span>
-            <button className="reset-btn action-btn" onClick={() => onReset(member.name)}>
-              Reset
+            <button 
+              className="add-btn action-btn" 
+              onClick={() => setShowAddForm(!showAddForm)}
+            >
+              Add
             </button>
           </div>
+          
+          {showAddForm && (
+            <div className="add-checklist-item">
+              <input
+                type="text"
+                value={newItemText}
+                onChange={(e) => setNewItemText(e.target.value)}
+                placeholder="Nová položka..."
+                maxLength="50"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleAddItem();
+                  if (e.key === 'Escape') setShowAddForm(false);
+                }}
+                autoFocus
+              />
+              <button onClick={handleAddItem} className="action-btn save-btn">
+                Přidat
+              </button>
+            </div>
+          )}
+          
           <ul>
-            {defaultChecklist.map(item => (
-              <li key={item.key}>
+            {allItems.map(item => (
+              <li key={item.key} className="checklist-item">
                 <input
                   type="checkbox"
                   checked={!!checklist[item.key]}
@@ -392,6 +504,13 @@
                   id={member.name + "_" + item.key}
                 />
                 <label htmlFor={member.name + "_" + item.key}>{item.label}</label>
+                <button 
+                  className="remove-item-btn action-btn delete-btn"
+                  onClick={() => onRemoveItem(member.name, item.key, !item.isCustom)}
+                  title={item.isCustom ? "Odstranit položku" : "Skrýt položku"}
+                >
+                  ×
+                </button>
               </li>
             ))}
           </ul>
@@ -399,7 +518,9 @@
       );
     });
 
-    const IndividualChecklists = memo(function IndividualChecklists({ checklists, onToggle, onReset }) {
+    const IndividualChecklists = memo(function IndividualChecklists({ 
+      checklists, customItems, hiddenItems, onToggle, onAddItem, onRemoveItem, onRestoreItem 
+    }) {
       return (
         <div className="individual-checklists-main section">
           <h2>🎒 Osobní vybavení</h2>
@@ -409,8 +530,12 @@
                 key={member.name}
                 member={member}
                 checklist={checklists?.[member.name] || {}}
+                customItems={customItems?.[member.name] || {}}
+                hiddenItems={hiddenItems?.[member.name] || {}}
                 onToggle={onToggle}
-                onReset={onReset}
+                onAddItem={onAddItem}
+                onRemoveItem={onRemoveItem}
+                onRestoreItem={onRestoreItem}
               />
             ))}
           </div>
@@ -429,7 +554,9 @@
         cancelEdit,
         deleteItem,
         toggleChecklistItem,
-        resetChecklist
+        addChecklistItem,
+        removeChecklistItem,
+        restoreDefaultItem
       } = useLanPartyData();
 
       return (
@@ -448,8 +575,12 @@
             </div>
             <IndividualChecklists
               checklists={items.individualChecklists}
+              customItems={items.customChecklistItems}
+              hiddenItems={items.hiddenDefaultItems}
               onToggle={toggleChecklistItem}
-              onReset={resetChecklist}
+              onAddItem={addChecklistItem}
+              onRemoveItem={removeChecklistItem}
+              onRestoreItem={restoreDefaultItem}
             />
             <ListSection
               title="Věci k sehnání/koupení"
