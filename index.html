@@ -156,6 +156,14 @@
         saveToDB(updated);
       };
 
+      // Nová funkce pro rychlé přiřazení
+      const quickAssign = (category, id, newPerson) => {
+        const currentItem = items[category].find(item => item.id === id);
+        if (currentItem) {
+          saveEdit(category, id, currentItem.text, newPerson || null);
+        }
+      };
+
       // --- Individuální checklisty ---
       const toggleChecklistItem = (user, key) => {
         const prevChecklist = items.individualChecklists?.[user] || {};
@@ -257,6 +265,7 @@
         saveEdit,
         cancelEdit,
         deleteItem,
+        quickAssign,
         toggleChecklistItem,
         addChecklistItem,
         removeChecklistItem,
@@ -296,11 +305,15 @@
       );
     });
 
-    const PersonAvatar = memo(function PersonAvatar({ personName }) {
+    const PersonAvatar = memo(function PersonAvatar({ personName, onClick, isClickable = false }) {
       const person = teamMembers.find(member => member.name === personName);
       if (!person) return null;
       return (
-        <div className="item-person">
+        <div 
+          className={`item-person ${isClickable ? 'clickable' : ''}`}
+          onClick={onClick}
+          style={isClickable ? { cursor: 'pointer' } : {}}
+        >
           <Avatar photo={person.photo} avatar={person.avatar} className="person-avatar" />
           <span>{person.name}</span>
         </div>
@@ -333,8 +346,34 @@
       );
     });
 
-    // ---- ITEM ROW ----
-    const ListItem = memo(function ListItem({ item, category, onToggle, onEdit, onDelete, onSaveEdit, onCancelEdit }) {
+    // ---- ITEM ROW s rychlým přiřazením ----
+    const ListItem = memo(function ListItem({ item, category, onToggle, onEdit, onDelete, onSaveEdit, onCancelEdit, onQuickAssign }) {
+      const [assigning, setAssigning] = useState(false);
+
+      const handleAvatarClick = (e) => {
+        e.stopPropagation();
+        setAssigning(a => !a);
+      };
+
+      const handleQuickAssign = (e) => {
+        onQuickAssign(item.id, e.target.value);
+        setAssigning(false);
+      };
+
+      const handleAssignClick = (e) => {
+        e.stopPropagation();
+        setAssigning(a => !a);
+      };
+
+      // Zavření dropdown při kliknutí mimo
+      useEffect(() => {
+        const handleClickOutside = () => setAssigning(false);
+        if (assigning) {
+          document.addEventListener('click', handleClickOutside);
+          return () => document.removeEventListener('click', handleClickOutside);
+        }
+      }, [assigning]);
+
       return (
         <li className={"item" + (item.completed ? " completed" : "")}>
           <input
@@ -354,7 +393,54 @@
             ) : (
               <>
                 <span className="item-text">{item.text}</span>
-                {item.assignedTo && <PersonAvatar personName={item.assignedTo} />}
+                {item.assignedTo ? (
+                  <div style={{ position: 'relative' }}>
+                    <PersonAvatar 
+                      personName={item.assignedTo} 
+                      onClick={handleAvatarClick}
+                      isClickable={true}
+                    />
+                    {assigning && (
+                      <div className="quick-assign-dropdown" onClick={e => e.stopPropagation()}>
+                        <select
+                          className="person-select"
+                          value={item.assignedTo}
+                          onChange={handleQuickAssign}
+                          autoFocus
+                        >
+                          <option value="">Nepřiřazeno</option>
+                          {teamMembers.map(member => (
+                            <option key={member.name} value={member.name}>{member.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div style={{ position: 'relative' }}>
+                    <button
+                      className="action-btn assign-btn"
+                      onClick={handleAssignClick}
+                    >
+                      Přiřadit
+                    </button>
+                    {assigning && (
+                      <div className="quick-assign-dropdown" onClick={e => e.stopPropagation()}>
+                        <select
+                          className="person-select"
+                          value=""
+                          onChange={handleQuickAssign}
+                          autoFocus
+                        >
+                          <option value="">Nepřiřazeno</option>
+                          {teamMembers.map(member => (
+                            <option key={member.name} value={member.name}>{member.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+                  </div>
+                )}
               </>
             )}
           </div>
@@ -417,7 +503,7 @@
       );
     });
 
-    const ListSection = memo(function ListSection({ title, emoji, category, items, onAdd, onToggle, onEdit, onDelete, onSaveEdit, onCancelEdit }) {
+    const ListSection = memo(function ListSection({ title, emoji, category, items, onAdd, onToggle, onEdit, onDelete, onSaveEdit, onCancelEdit, onQuickAssign }) {
       return (
         <div className="section">
           <h2>{emoji} {title}</h2>
@@ -433,6 +519,7 @@
                 onDelete={id => onDelete(id)}
                 onSaveEdit={(id, text, assignedTo) => onSaveEdit(id, text, assignedTo)}
                 onCancelEdit={id => onCancelEdit(id)}
+                onQuickAssign={onQuickAssign}
               />
             ))}
           </ul>
@@ -554,16 +641,22 @@
         saveEdit,
         cancelEdit,
         deleteItem,
+        quickAssign,
         toggleChecklistItem,
         addChecklistItem,
         removeChecklistItem,
         restoreDefaultItem
       } = useLanPartyData();
 
+      // Funkce pro rychlé přiřazení osoby
+      const handleQuickAssign = (category) => (id, newPerson) => {
+        quickAssign(category, id, newPerson);
+      };
+
       return (
         <div className="container">
           <div className="header">
-            <h1>CS2 LAN Party Plánovač</h1>
+            <h1>🎮 CS2 LAN Party Plánovač</h1>
           </div>
           <div className="content">
             <div className="section team-section">
@@ -594,6 +687,7 @@
               onDelete={id => deleteItem('buy', id)}
               onSaveEdit={(id, text, assignedTo) => saveEdit('buy', id, text, assignedTo)}
               onCancelEdit={id => cancelEdit('buy', id)}
+              onQuickAssign={handleQuickAssign('buy')}
             />
             <ListSection
               title="Věci k zjištění"
@@ -606,6 +700,7 @@
               onDelete={id => deleteItem('solve', id)}
               onSaveEdit={(id, text, assignedTo) => saveEdit('solve', id, text, assignedTo)}
               onCancelEdit={id => cancelEdit('solve', id)}
+              onQuickAssign={handleQuickAssign('solve')}
             />
           </div>
         </div>
@@ -616,5 +711,52 @@
     const root = ReactDOM.createRoot(document.getElementById("root"));
     root.render(<CS2LanPlanner />);
   </script>
+  
+  <style>
+    /* Přidáme CSS pro rychlé přiřazení */
+    .item-person.clickable:hover {
+      background-color: #f0f0f0;
+      border-radius: 4px;
+    }
+    
+    .quick-assign-dropdown {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      z-index: 1000;
+      background: white;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      margin-top: 4px;
+      min-width: 150px;
+    }
+    
+    .quick-assign-dropdown .person-select {
+      width: 100%;
+      border: none;
+      background: transparent;
+      margin: 0;
+      padding: 8px 12px;
+    }
+    
+    .quick-assign-dropdown .person-select:focus {
+      outline: none;
+    }
+    
+    .assign-btn {
+      background: #007bff;
+      color: white;
+      border: none;
+      padding: 4px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+    }
+    
+    .assign-btn:hover {
+      background: #0056b3;
+    }
+  </style>
 </body>
 </html>
