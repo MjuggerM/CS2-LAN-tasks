@@ -12,7 +12,7 @@
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <script type="text/babel">
-    // DATA (team members + úkoly)
+    // ---- DATA ----
     const teamMembers = [
       { name: 'Radim', avatar: 'R', photo: 'radimgod.jpg' },
       { name: 'Doriman', avatar: 'D', photo: 'doriman.jpg' },
@@ -36,35 +36,35 @@
       ]
     };
 
-    // HOOKS
-    const { useState, useEffect } = React;
+    // ---- HOOK (data, efektivně přes localStorage) ----
+    const { useState, useRef, useEffect, memo } = React;
     function useLanPartyData() {
       const [items, setItems] = useState(() => {
-        if (typeof window !== 'undefined' && window.lanPartyData) {
-          try {
-            return JSON.parse(window.lanPartyData);
-          } catch (e) {}
+        try {
+          const saved = localStorage.getItem('lanPartyData');
+          return saved ? JSON.parse(saved) : initialData;
+        } catch {
+          return initialData;
         }
-        return initialData;
       });
 
       useEffect(() => {
-        if (typeof window !== 'undefined') {
-          window.lanPartyData = JSON.stringify(items);
-        }
+        localStorage.setItem('lanPartyData', JSON.stringify(items));
       }, [items]);
 
       const addItem = (category, text, assignedTo) => {
-        const newItem = {
-          id: Date.now(),
-          text,
-          completed: false,
-          assignedTo,
-          editing: false
-        };
         setItems(prev => ({
           ...prev,
-          [category]: [...prev[category], newItem]
+          [category]: [
+            ...prev[category],
+            {
+              id: Date.now(),
+              text,
+              completed: false,
+              assignedTo,
+              editing: false
+            }
+          ]
         }));
       };
 
@@ -111,114 +111,96 @@
         }));
       };
 
-      return {
-        items,
-        addItem,
-        toggleItem,
-        editItem,
-        saveEdit,
-        cancelEdit,
-        deleteItem
-      };
+      return { items, addItem, toggleItem, editItem, saveEdit, cancelEdit, deleteItem };
     }
 
-    // KOMPONENTY
-    function TeamMember({ member }) {
+    // ---- AVATAR re-use ----
+    const Avatar = memo(function Avatar({ photo, avatar, className = "" }) {
+      return (
+        <div
+          className={className + (photo ? " photo" : "")}
+          style={photo ? { backgroundImage: `url(${photo})` } : undefined}
+        >
+          {!photo && avatar}
+        </div>
+      );
+    });
+
+    const TeamMember = memo(function TeamMember({ member }) {
       return (
         <div className="team-member">
-          <div
-            className={`team-member-avatar${member.photo ? ' photo' : ''}`}
-            style={
-              member.photo
-                ? { backgroundImage: `url(${member.photo})` }
-                : undefined
-            }
-          >
-            {!member.photo && member.avatar}
-          </div>
+          <Avatar photo={member.photo} avatar={member.avatar} className="team-member-avatar" />
           <div className="team-member-name">{member.name}</div>
         </div>
       );
-    }
+    });
 
-    function PersonSelect({ value, onChange, id }) {
+    const PersonSelect = memo(function PersonSelect({ value, onChange }) {
       return (
-        <select className="person-select" value={value} onChange={onChange} id={id}>
+        <select className="person-select" value={value} onChange={onChange}>
           <option value="">Nepřiřazeno</option>
           {teamMembers.map(member => (
             <option key={member.name} value={member.name}>{member.name}</option>
           ))}
         </select>
       );
-    }
+    });
 
-    function PersonAvatar({ personName }) {
+    const PersonAvatar = memo(function PersonAvatar({ personName }) {
       const person = teamMembers.find(member => member.name === personName);
       if (!person) return null;
       return (
         <div className="item-person">
-          <div
-            className={`person-avatar${person.photo ? ' photo' : ''}`}
-            style={
-              person.photo
-                ? { backgroundImage: `url(${person.photo})` }
-                : undefined
-            }
-          >
-            {!person.photo && person.avatar}
-          </div>
+          <Avatar photo={person.photo} avatar={person.avatar} className="person-avatar" />
           <span>{person.name}</span>
         </div>
       );
-    }
+    });
 
-    function EditForm({ item, category, onSave, onCancel }) {
+    const EditForm = memo(function EditForm({ item, category, onSave, onCancel }) {
       const [text, setText] = useState(item.text);
-      const [assignedTo, setAssignedTo] = useState(item.assignedTo || '');
+      const [assignedTo, setAssignedTo] = useState(item.assignedTo || "");
+      const inputRef = useRef(null);
 
-      const handleSave = () => {
-        if (text.trim()) {
-          onSave(item.id, text.trim(), assignedTo || null);
-        }
-      };
-
-      const handleKeyPress = (e) => {
-        if (e.key === 'Enter') {
-          handleSave();
-        } else if (e.key === 'Escape') {
-          onCancel(item.id);
-        }
-      };
+      useEffect(() => {
+        if (inputRef.current) inputRef.current.focus();
+      }, []);
 
       return (
         <div className="edit-form">
           <input
+            ref={inputRef}
             type="text"
             value={text}
-            onChange={(e) => setText(e.target.value)}
-            onKeyDown={handleKeyPress}
+            onChange={e => setText(e.target.value)}
             maxLength="100"
-            autoFocus
+            onKeyDown={e => { if (e.key === "Enter") onSave(item.id, text, assignedTo); if (e.key === "Escape") onCancel(item.id); }}
           />
-          <PersonSelect
-            value={assignedTo}
-            onChange={(e) => setAssignedTo(e.target.value)}
-          />
+          <PersonSelect value={assignedTo} onChange={e => setAssignedTo(e.target.value)} />
           <div className="edit-form-actions">
-            <button className="action-btn save-btn" onClick={handleSave}>
-              Uložit
-            </button>
-            <button className="action-btn cancel-btn" onClick={() => onCancel(item.id)}>
-              Zrušit
-            </button>
+            <button className="action-btn save-btn" onClick={() => onSave(item.id, text, assignedTo)}>Uložit</button>
+            <button className="action-btn cancel-btn" onClick={() => onCancel(item.id)}>Zrušit</button>
           </div>
         </div>
       );
-    }
+    });
 
-    function ListItem({ item, category, onToggle, onEdit, onDelete, onSaveEdit, onCancelEdit }) {
+    // ---- ITEM ROW ----
+    const ListItem = memo(function ListItem({ item, category, onToggle, onEdit, onDelete, onSaveEdit, onCancelEdit, onQuickAssign }) {
+      const [assigning, setAssigning] = useState(false);
+
+      const handleAvatarClick = (e) => {
+        e.stopPropagation();
+        setAssigning(a => !a);
+      };
+
+      const handleQuickAssign = (e) => {
+        onQuickAssign(item.id, e.target.value);
+        setAssigning(false);
+      };
+
       return (
-        <li className={`item${item.completed ? ' completed' : ''}`}>
+        <li className={"item" + (item.completed ? " completed" : "")}>
           <input
             type="checkbox"
             checked={item.completed}
@@ -236,41 +218,95 @@
             ) : (
               <>
                 <span className="item-text">{item.text}</span>
-                {item.assignedTo && <PersonAvatar personName={item.assignedTo} />}
+{item.assignedTo && (
+  <>
+    <span onClick={handleAvatarClick} style={{ cursor: "pointer" }}>
+      <PersonAvatar personName={item.assignedTo} />
+    </span>
+    {assigning && (
+      <div style={{ marginTop: "6px" }}>
+        <select
+          className="person-select"
+          style={{
+            width: "100%",
+            maxWidth: "220px"
+          }}
+          value={item.assignedTo}
+          onChange={handleQuickAssign}
+          onClick={e => e.stopPropagation()}
+        >
+          <option value="">Nepřiřazeno</option>
+          {teamMembers.map(member => (
+            <option key={member.name} value={member.name}>{member.name}</option>
+          ))}
+        </select>
+      </div>
+    )}
+  </>
+)}
+
+                {!item.assignedTo && (
+                  <span style={{ position: "relative" }}>
+                    <button
+                      className="action-btn"
+                      style={{ marginLeft: "6px" }}
+                      onClick={() => setAssigning(a => !a)}
+                      tabIndex={-1}
+                    >Přiřadit</button>
+                    {assigning && (
+                      <select
+                        className="person-select"
+              style={{
+                position: "absolute",
+                left: 0,
+                bottom: "100%",            // Tohle je hlavní změna!
+                zIndex: 100,
+                minWidth: "120px",
+                maxWidth: "95%",
+                marginBottom: "5px",
+                boxShadow: "0 4px 18px rgba(0,0,0,0.09)",
+                background: "white"
+              }}
+
+
+                        value=""
+                        onChange={handleQuickAssign}
+                        onClick={e => e.stopPropagation()}
+                      >
+                        <option value="">Nepřiřazeno</option>
+                        {teamMembers.map(member => (
+                          <option key={member.name} value={member.name}>{member.name}</option>
+                        ))}
+                      </select>
+                    )}
+                  </span>
+                )}
               </>
             )}
           </div>
           <div className="item-actions">
             {!item.editing && (
               <>
-                <button className="action-btn edit-btn" onClick={() => onEdit(item.id)}>
-                  Upravit
-                </button>
-                <button className="action-btn delete-btn" onClick={() => onDelete(item.id)}>
-                  Smazat
-                </button>
+                <button className="action-btn edit-btn" onClick={() => onEdit(item.id)}>Upravit</button>
+                <button className="action-btn delete-btn" onClick={() => onDelete(item.id)}>Smazat</button>
               </>
             )}
           </div>
         </li>
       );
-    }
+    });
 
-    function AddItemForm({ category, onAdd }) {
+    const AddItemForm = memo(function AddItemForm({ category, onAdd }) {
       const [text, setText] = useState('');
       const [assignedTo, setAssignedTo] = useState('');
+      const inputRef = useRef(null);
 
       const handleSubmit = () => {
         if (text.trim()) {
           onAdd(category, text.trim(), assignedTo || null);
           setText('');
           setAssignedTo('');
-        }
-      };
-
-      const handleKeyPress = (e) => {
-        if (e.key === 'Enter') {
-          handleSubmit();
+          if (inputRef.current) inputRef.current.focus();
         }
       };
 
@@ -278,26 +314,22 @@
         <div className="add-item">
           <div className="add-item-row">
             <input
+              ref={inputRef}
               type="text"
               value={text}
-              onChange={(e) => setText(e.target.value)}
-              onKeyDown={handleKeyPress}
+              onChange={e => setText(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter") handleSubmit(); }}
               placeholder={category === 'buy' ? 'Přidat položku k sehnání...' : 'Přidat úkol k vyřešení...'}
               maxLength="100"
             />
-            <PersonSelect
-              value={assignedTo}
-              onChange={(e) => setAssignedTo(e.target.value)}
-            />
-            <button className="add-btn" onClick={handleSubmit}>
-              Přidat
-            </button>
+            <PersonSelect value={assignedTo} onChange={e => setAssignedTo(e.target.value)} />
+            <button className="add-btn" onClick={handleSubmit}>Přidat</button>
           </div>
         </div>
       );
-    }
+    });
 
-    function ProgressStats({ items }) {
+    const ProgressStats = memo(function ProgressStats({ items }) {
       const total = items.length;
       const completed = items.filter(item => item.completed).length;
       const percentage = total > 0 ? (completed / total) * 100 : 0;
@@ -305,13 +337,13 @@
         <div className="stats">
           <div>Dokončeno: {completed} / {total}</div>
           <div className="progress-bar">
-            <div className="progress-fill" style={{ width: `${percentage}%` }}></div>
+            <div className="progress-fill" style={{ width: percentage + "%" }}></div>
           </div>
         </div>
       );
-    }
+    });
 
-    function ListSection({ title, emoji, category, items, onAdd, onToggle, onEdit, onDelete, onSaveEdit, onCancelEdit }) {
+    const ListSection = memo(function ListSection({ title, emoji, category, items, onAdd, onToggle, onEdit, onDelete, onSaveEdit, onCancelEdit, onQuickAssign }) {
       return (
         <div className="section">
           <h2>{emoji} {title}</h2>
@@ -327,29 +359,31 @@
                 onDelete={onDelete}
                 onSaveEdit={onSaveEdit}
                 onCancelEdit={onCancelEdit}
+                onQuickAssign={onQuickAssign}
               />
             ))}
           </ul>
           <ProgressStats items={items} />
         </div>
       );
-    }
+    });
 
+    // ---- MAIN APP ----
     function CS2LanPlanner() {
-      const {
-        items,
-        addItem,
-        toggleItem,
-        editItem,
-        saveEdit,
-        cancelEdit,
-        deleteItem
-      } = useLanPartyData();
+      const { items, addItem, toggleItem, editItem, saveEdit, cancelEdit, deleteItem } = useLanPartyData();
+
+      // Funkce pro rychlé přiřazení osoby
+      const quickAssign = (category) => (id, newPerson) => {
+        saveEdit(category, id,
+          items[category].find(item => item.id === id).text,
+          newPerson || null
+        );
+      };
 
       return (
         <div className="container">
           <div className="header">
-            <h1>CS2 LAN Party Plánovač</h1>
+            <h1>🎮 CS2 LAN Party Plánovač</h1>
           </div>
           <div className="content">
             <div className="section team-section">
@@ -371,6 +405,7 @@
               onDelete={id => deleteItem('buy', id)}
               onSaveEdit={(id, text, assignedTo) => saveEdit('buy', id, text, assignedTo)}
               onCancelEdit={id => cancelEdit('buy', id)}
+              onQuickAssign={quickAssign('buy')}
             />
             <ListSection
               title="Věci k vyřešení/zjištění"
@@ -383,13 +418,14 @@
               onDelete={id => deleteItem('solve', id)}
               onSaveEdit={(id, text, assignedTo) => saveEdit('solve', id, text, assignedTo)}
               onCancelEdit={id => cancelEdit('solve', id)}
+              onQuickAssign={quickAssign('solve')}
             />
           </div>
         </div>
       );
     }
 
-    // START APP
+    // ---- RENDER ----
     const root = ReactDOM.createRoot(document.getElementById("root"));
     root.render(<CS2LanPlanner />);
   </script>
