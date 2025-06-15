@@ -367,6 +367,57 @@ body {
   background: #fffaf3 !important;
   border-left: 4px solid #f39c12 !important;
 }
+/* Individuální Checklisty */
+.individual-checklists-main {
+  grid-column: 1 / -1;
+}
+
+.individual-checklists {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 20px;
+  margin-top: 20px;
+}
+
+.individual-checklist {
+  background: #f8f9fa;
+  border-radius: 12px;
+  padding: 15px;
+  border: 2px solid #e0e0e0;
+}
+
+.individual-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 15px;
+  font-weight: bold;
+}
+
+.individual-checklist ul {
+  list-style: none;
+}
+
+.individual-checklist li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.individual-checklist input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: #f39c12;
+}
+
+.reset-btn {
+  margin-left: auto;
+  background: #6c757d;
+  color: white;
+  padding: 4px 8px;
+  font-size: 12px;
+}
 
 /* MEDIA QUERY JEDNOU */
 @media (max-width: 768px) {

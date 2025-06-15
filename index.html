@@ -87,7 +87,7 @@
         db.ref('cs2checklist/items').set(newItems);
       };
 
-      // --- Standardní task funkce (beze změny) ---
+      // --- Standardní task funkce ---
       const addItem = (category, text, assignedTo) => {
         const newItem = {
           id: Date.now() + Math.floor(Math.random()*1000),
