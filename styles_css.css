@@ -417,6 +417,32 @@ body {
   align-items: center;
   gap: 7px;
 }
+/* Odlišení checklistů */
+.checklist-top {
+  background: #fff7ec !important;
+  border: 2px solid #ffe0b2 !important;
+  box-shadow: 0 2px 10px rgba(243, 156, 18, 0.08);
+}
+
+.checklist-bottom {
+  background: #ecf7ff !important;
+  border: 2px solid #b2d7ff !important;
+  box-shadow: 0 2px 10px rgba(52, 152, 219, 0.08);
+}
+
+.checklist-bottom .item {
+  background: #f0f8ff !important;
+  border-left: none !important;
+}
+.checklist-bottom h2 {
+  color: #21618c;
+}
+
+.checklist-top .item {
+  background: #fffaf3 !important;
+  border-left: 4px solid #f39c12 !important;
+}
+
 
 /* ---- MEDIA QUERY JEDNOU ---- */
 @media (max-width: 768px) {
