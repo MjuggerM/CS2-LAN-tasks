@@ -5,6 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>CS2 LAN Party Plánovač</title>
   <link rel="stylesheet" href="styles_css.css" />
+  <!-- Firebase knihovny -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
 </head>
 <body>
   <div id="root"></div>
@@ -12,6 +15,21 @@
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <script type="text/babel">
+
+    // ---- Firebase config ----
+    const firebaseConfig = {
+      apiKey: "AIzaSyBYKi2hMqT8SaBzgzJozxsA_Hvb_qNGCMc",
+      authDomain: "cs2checklist.firebaseapp.com",
+      databaseURL: "https://cs2checklist-default-rtdb.europe-west1.firebasedatabase.app",
+      projectId: "cs2checklist",
+      storageBucket: "cs2checklist.appspot.com",
+      messagingSenderId: "499983568529",
+      appId: "1:499983568529:web:efa1d26ece5804abc2b930",
+      measurementId: "G-DPN9HWTLPS"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
     // ---- DATA ----
     const teamMembers = [
       { name: 'Radim', avatar: 'R', photo: 'radimgod.jpg' },
@@ -36,79 +54,91 @@
       ]
     };
 
-    // ---- HOOK (data, efektivně přes localStorage) ----
+    // ---- HOOK: Realtime sync s Firebase ----
     const { useState, useRef, useEffect, memo } = React;
     function useLanPartyData() {
-      const [items, setItems] = useState(() => {
-        try {
-          const saved = localStorage.getItem('lanPartyData');
-          return saved ? JSON.parse(saved) : initialData;
-        } catch {
-          return initialData;
-        }
-      });
+      const [items, setItems] = useState(initialData);
 
+      // Realtime načtení ze serveru při startu (a na změnu)
       useEffect(() => {
-        localStorage.setItem('lanPartyData', JSON.stringify(items));
-      }, [items]);
+        const ref = db.ref('cs2checklist/items');
+        ref.on('value', snapshot => {
+          const val = snapshot.val();
+          if (val) setItems(val);
+        });
+        // první zápis při prvním spuštění, pokud je DB prázdná
+        ref.once('value', snapshot => {
+          if (!snapshot.exists()) ref.set(initialData);
+        });
+        return () => ref.off();
+      }, []);
+
+      // Zápis do DB (přepisuje celý items objekt)
+      const saveToDB = (newItems) => {
+        db.ref('cs2checklist/items').set(newItems);
+      };
 
       const addItem = (category, text, assignedTo) => {
-        setItems(prev => ({
-          ...prev,
-          [category]: [
-            ...prev[category],
-            {
-              id: Date.now(),
-              text,
-              completed: false,
-              assignedTo,
-              editing: false
-            }
-          ]
-        }));
+        const newItem = {
+          id: Date.now() + Math.floor(Math.random()*1000),
+          text,
+          completed: false,
+          assignedTo,
+          editing: false
+        };
+        const updated = {
+          ...items,
+          [category]: [...(items[category] || []), newItem]
+        };
+        saveToDB(updated);
       };
 
       const toggleItem = (category, id) => {
-        setItems(prev => ({
-          ...prev,
-          [category]: prev[category].map(item =>
+        const updated = {
+          ...items,
+          [category]: items[category].map(item =>
             item.id === id ? { ...item, completed: !item.completed } : item
           )
-        }));
+        };
+        saveToDB(updated);
       };
 
       const editItem = (category, id) => {
-        setItems(prev => ({
-          ...prev,
-          [category]: prev[category].map(item =>
+        const updated = {
+          ...items,
+          [category]: items[category].map(item =>
             item.id === id ? { ...item, editing: true } : item
           )
-        }));
+        };
+        saveToDB(updated);
       };
 
       const saveEdit = (category, id, text, assignedTo) => {
-        setItems(prev => ({
-          ...prev,
-          [category]: prev[category].map(item =>
+        const updated = {
+          ...items,
+          [category]: items[category].map(item =>
             item.id === id ? { ...item, text, assignedTo, editing: false } : item
           )
-        }));
+        };
+        saveToDB(updated);
       };
 
       const cancelEdit = (category, id) => {
-        setItems(prev => ({
-          ...prev,
-          [category]: prev[category].map(item =>
+        const updated = {
+          ...items,
+          [category]: items[category].map(item =>
             item.id === id ? { ...item, editing: false } : item
           )
-        }));
+        };
+        saveToDB(updated);
       };
 
       const deleteItem = (category, id) => {
-        setItems(prev => ({
-          ...prev,
-          [category]: prev[category].filter(item => item.id !== id)
-        }));
+        const updated = {
+          ...items,
+          [category]: items[category].filter(item => item.id !== id)
+        };
+        saveToDB(updated);
       };
 
       return { items, addItem, toggleItem, editItem, saveEdit, cancelEdit, deleteItem };
@@ -162,9 +192,7 @@
       const [assignedTo, setAssignedTo] = useState(item.assignedTo || "");
       const inputRef = useRef(null);
 
-      useEffect(() => {
-        if (inputRef.current) inputRef.current.focus();
-      }, []);
+      useEffect(() => { if (inputRef.current) inputRef.current.focus(); }, []);
 
       return (
         <div className="edit-form">
@@ -186,19 +214,7 @@
     });
 
     // ---- ITEM ROW ----
-    const ListItem = memo(function ListItem({ item, category, onToggle, onEdit, onDelete, onSaveEdit, onCancelEdit, onQuickAssign }) {
-      const [assigning, setAssigning] = useState(false);
-
-      const handleAvatarClick = (e) => {
-        e.stopPropagation();
-        setAssigning(a => !a);
-      };
-
-      const handleQuickAssign = (e) => {
-        onQuickAssign(item.id, e.target.value);
-        setAssigning(false);
-      };
-
+    const ListItem = memo(function ListItem({ item, category, onToggle, onEdit, onDelete, onSaveEdit, onCancelEdit }) {
       return (
         <li className={"item" + (item.completed ? " completed" : "")}>
           <input
@@ -218,69 +234,7 @@
             ) : (
               <>
                 <span className="item-text">{item.text}</span>
-{item.assignedTo && (
-  <>
-    <span onClick={handleAvatarClick} style={{ cursor: "pointer" }}>
-      <PersonAvatar personName={item.assignedTo} />
-    </span>
-    {assigning && (
-      <div style={{ marginTop: "6px" }}>
-        <select
-          className="person-select"
-          style={{
-            width: "100%",
-            maxWidth: "220px"
-          }}
-          value={item.assignedTo}
-          onChange={handleQuickAssign}
-          onClick={e => e.stopPropagation()}
-        >
-          <option value="">Nepřiřazeno</option>
-          {teamMembers.map(member => (
-            <option key={member.name} value={member.name}>{member.name}</option>
-          ))}
-        </select>
-      </div>
-    )}
-  </>
-)}
-
-                {!item.assignedTo && (
-                  <span style={{ position: "relative" }}>
-                    <button
-                      className="action-btn"
-                      style={{ marginLeft: "6px" }}
-                      onClick={() => setAssigning(a => !a)}
-                      tabIndex={-1}
-                    >Přiřadit</button>
-                    {assigning && (
-                      <select
-                        className="person-select"
-              style={{
-                position: "absolute",
-                left: 0,
-                bottom: "100%",            // Tohle je hlavní změna!
-                zIndex: 100,
-                minWidth: "120px",
-                maxWidth: "95%",
-                marginBottom: "5px",
-                boxShadow: "0 4px 18px rgba(0,0,0,0.09)",
-                background: "white"
-              }}
-
-
-                        value=""
-                        onChange={handleQuickAssign}
-                        onClick={e => e.stopPropagation()}
-                      >
-                        <option value="">Nepřiřazeno</option>
-                        {teamMembers.map(member => (
-                          <option key={member.name} value={member.name}>{member.name}</option>
-                        ))}
-                      </select>
-                    )}
-                  </span>
-                )}
+                {item.assignedTo && <PersonAvatar personName={item.assignedTo} />}
               </>
             )}
           </div>
@@ -343,7 +297,7 @@
       );
     });
 
-    const ListSection = memo(function ListSection({ title, emoji, category, items, onAdd, onToggle, onEdit, onDelete, onSaveEdit, onCancelEdit, onQuickAssign }) {
+    const ListSection = memo(function ListSection({ title, emoji, category, items, onAdd, onToggle, onEdit, onDelete, onSaveEdit, onCancelEdit }) {
       return (
         <div className="section">
           <h2>{emoji} {title}</h2>
@@ -354,12 +308,11 @@
                 key={item.id}
                 item={item}
                 category={category}
-                onToggle={onToggle}
-                onEdit={onEdit}
-                onDelete={onDelete}
-                onSaveEdit={onSaveEdit}
-                onCancelEdit={onCancelEdit}
-                onQuickAssign={onQuickAssign}
+                onToggle={id => onToggle(id)}
+                onEdit={id => onEdit(id)}
+                onDelete={id => onDelete(id)}
+                onSaveEdit={(id, text, assignedTo) => onSaveEdit(id, text, assignedTo)}
+                onCancelEdit={id => onCancelEdit(id)}
               />
             ))}
           </ul>
@@ -372,18 +325,10 @@
     function CS2LanPlanner() {
       const { items, addItem, toggleItem, editItem, saveEdit, cancelEdit, deleteItem } = useLanPartyData();
 
-      // Funkce pro rychlé přiřazení osoby
-      const quickAssign = (category) => (id, newPerson) => {
-        saveEdit(category, id,
-          items[category].find(item => item.id === id).text,
-          newPerson || null
-        );
-      };
-
       return (
         <div className="container">
           <div className="header">
-            <h1>🎮 CS2 LAN Party Plánovač</h1>
+            <h1>CS2 LAN Party Plánovač</h1>
           </div>
           <div className="content">
             <div className="section team-section">
@@ -405,7 +350,6 @@
               onDelete={id => deleteItem('buy', id)}
               onSaveEdit={(id, text, assignedTo) => saveEdit('buy', id, text, assignedTo)}
               onCancelEdit={id => cancelEdit('buy', id)}
-              onQuickAssign={quickAssign('buy')}
             />
             <ListSection
               title="Věci k vyřešení/zjištění"
@@ -418,7 +362,6 @@
               onDelete={id => deleteItem('solve', id)}
               onSaveEdit={(id, text, assignedTo) => saveEdit('solve', id, text, assignedTo)}
               onCancelEdit={id => cancelEdit('solve', id)}
-              onQuickAssign={quickAssign('solve')}
             />
           </div>
         </div>
