@@ -15,7 +15,6 @@
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <script type="text/babel">
-
     // ---- Firebase config ----
     const firebaseConfig = {
       apiKey: "AIzaSyBYKi2hMqT8SaBzgzJozxsA_Hvb_qNGCMc",
@@ -39,6 +38,10 @@
       { name: 'Sejr', avatar: 'S', photo: 'sejr.jpg' }
     ];
 
+    const individualChecklistItems = [
+      "PC", "Monitor", "Myš", "Klávesnice", "Podložka"
+    ];
+
     const initialData = {
       buy: [
         { id: 1, text: 'Ethernet kabely', completed: false, assignedTo: 'Radim' },
@@ -51,7 +54,13 @@
         { id: 6, text: 'Vybrat datum', completed: false, assignedTo: 'Sejr' },
         { id: 7, text: 'Zkontrolovat internet', completed: false, assignedTo: 'Radim' },
         { id: 8, text: 'Nastavit CS2 server', completed: false, assignedTo: null }
-      ]
+      ],
+      individual: Object.fromEntries(
+        teamMembers.map(member => [
+          member.name,
+          Object.fromEntries(individualChecklistItems.map(i => [i, false]))
+        ])
+      ),
     };
 
     // ---- HOOK: Realtime sync s Firebase ----
@@ -59,24 +68,20 @@
     function useLanPartyData() {
       const [items, setItems] = useState(initialData);
 
-      // Realtime načtení ze serveru při startu (a na změnu)
+      // Načítání ze serveru
       useEffect(() => {
         const ref = db.ref('cs2checklist/items');
         ref.on('value', snapshot => {
           const val = snapshot.val();
           if (val) setItems(val);
         });
-        // první zápis při prvním spuštění, pokud je DB prázdná
         ref.once('value', snapshot => {
           if (!snapshot.exists()) ref.set(initialData);
         });
         return () => ref.off();
       }, []);
 
-      // Zápis do DB (přepisuje celý items objekt)
-      const saveToDB = (newItems) => {
-        db.ref('cs2checklist/items').set(newItems);
-      };
+      const saveToDB = (newItems) => db.ref('cs2checklist/items').set(newItems);
 
       const addItem = (category, text, assignedTo) => {
         const newItem = {
@@ -141,10 +146,34 @@
         saveToDB(updated);
       };
 
-      return { items, addItem, toggleItem, editItem, saveEdit, cancelEdit, deleteItem };
+      // --- INDIVIDUAL CHECKLIST (přepínání) ---
+      const toggleIndividual = (user, itemName) => {
+        const updated = {
+          ...items,
+          individual: {
+            ...items.individual,
+            [user]: {
+              ...items.individual[user],
+              [itemName]: !items.individual[user][itemName]
+            }
+          }
+        };
+        saveToDB(updated);
+      };
+
+      return {
+        items,
+        addItem,
+        toggleItem,
+        editItem,
+        saveEdit,
+        cancelEdit,
+        deleteItem,
+        toggleIndividual,
+      };
     }
 
-    // ---- AVATAR re-use ----
+    // --- Ostatní komponenty jsou stejné jako výše ---
     const Avatar = memo(function Avatar({ photo, avatar, className = "" }) {
       return (
         <div
@@ -213,7 +242,6 @@
       );
     });
 
-    // ---- ITEM ROW ----
     const ListItem = memo(function ListItem({ item, category, onToggle, onEdit, onDelete, onSaveEdit, onCancelEdit }) {
       return (
         <li className={"item" + (item.completed ? " completed" : "")}>
@@ -308,11 +336,11 @@
                 key={item.id}
                 item={item}
                 category={category}
-                onToggle={id => onToggle(id)}
-                onEdit={id => onEdit(id)}
-                onDelete={id => onDelete(id)}
-                onSaveEdit={(id, text, assignedTo) => onSaveEdit(id, text, assignedTo)}
-                onCancelEdit={id => onCancelEdit(id)}
+                onToggle={onToggle}
+                onEdit={onEdit}
+                onDelete={onDelete}
+                onSaveEdit={onSaveEdit}
+                onCancelEdit={onCancelEdit}
               />
             ))}
           </ul>
@@ -321,48 +349,86 @@
       );
     });
 
-    // ---- MAIN APP ----
+    // ---- INDIVIDUAL CHECKLIST ----
+    function IndividualChecklists({ state, onToggle }) {
+      return (
+        <div className="individual-checklists-main">
+          <h2 className="individual-checklists-title">🎒 Individuální checklisty</h2>
+          <div className="individual-checklists">
+            {teamMembers.map(member => (
+              <div className="individual-checklist" key={member.name}>
+                <div className="individual-title">
+                  <Avatar photo={member.photo} avatar={member.avatar} className="team-member-avatar" />
+                  <span>{member.name}</span>
+                </div>
+                <ul>
+                  {individualChecklistItems.map(item => (
+                    <li key={item}>
+                      <input
+                        type="checkbox"
+                        checked={!!(state?.[member.name]?.[item])}
+                        onChange={() => onToggle(member.name, item)}
+                        id={`check-${member.name}-${item}`}
+                      />
+                      <label htmlFor={`check-${member.name}-${item}`}>{item}</label>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    // ---- MAIN APP (GRID) ----
     function CS2LanPlanner() {
-      const { items, addItem, toggleItem, editItem, saveEdit, cancelEdit, deleteItem } = useLanPartyData();
+      const { items, addItem, toggleItem, editItem, saveEdit, cancelEdit, deleteItem, toggleIndividual } = useLanPartyData();
 
       return (
         <div className="container">
           <div className="header">
             <h1>CS2 LAN Party Plánovač</h1>
           </div>
-          <div className="content">
-            <div className="section team-section">
-              <h2>👥 Tým</h2>
-              <div className="team-members">
-                {teamMembers.map(member => (
-                  <TeamMember key={member.name} member={member} />
-                ))}
-              </div>
+          <div className="content-grid">
+            <div className="content-cell"><ListSection
+                title="Věci k sehnání/koupení"
+                emoji="🛍️"
+                category="buy"
+                items={items.buy || []}
+                onAdd={addItem}
+                onToggle={id => toggleItem('buy', id)}
+                onEdit={id => editItem('buy', id)}
+                onDelete={id => deleteItem('buy', id)}
+                onSaveEdit={(id, text, assignedTo) => saveEdit('buy', id, text, assignedTo)}
+                onCancelEdit={id => cancelEdit('buy', id)}
+            /></div>
+            <div className="content-cell"><ListSection
+                title="Věci k vyřešení/zjištění"
+                emoji="📋"
+                category="solve"
+                items={items.solve || []}
+                onAdd={addItem}
+                onToggle={id => toggleItem('solve', id)}
+                onEdit={id => editItem('solve', id)}
+                onDelete={id => deleteItem('solve', id)}
+                onSaveEdit={(id, text, assignedTo) => saveEdit('solve', id, text, assignedTo)}
+                onCancelEdit={id => cancelEdit('solve', id)}
+            /></div>
+            <div className="content-row-bottom" style={{ gridColumn: "1 / span 2" }}>
+              <IndividualChecklists
+                state={items.individual || {}}
+                onToggle={toggleIndividual}
+              />
             </div>
-            <ListSection
-              title="Věci k sehnání/koupení"
-              emoji="🛍️"
-              category="buy"
-              items={items.buy}
-              onAdd={addItem}
-              onToggle={id => toggleItem('buy', id)}
-              onEdit={id => editItem('buy', id)}
-              onDelete={id => deleteItem('buy', id)}
-              onSaveEdit={(id, text, assignedTo) => saveEdit('buy', id, text, assignedTo)}
-              onCancelEdit={id => cancelEdit('buy', id)}
-            />
-            <ListSection
-              title="Věci k vyřešení/zjištění"
-              emoji="📋"
-              category="solve"
-              items={items.solve}
-              onAdd={addItem}
-              onToggle={id => toggleItem('solve', id)}
-              onEdit={id => editItem('solve', id)}
-              onDelete={id => deleteItem('solve', id)}
-              onSaveEdit={(id, text, assignedTo) => saveEdit('solve', id, text, assignedTo)}
-              onCancelEdit={id => cancelEdit('solve', id)}
-            />
+          </div>
+          <div className="section team-section">
+            <h2>👥 Tým</h2>
+            <div className="team-members">
+              {teamMembers.map(member => (
+                <TeamMember key={member.name} member={member} />
+              ))}
+            </div>
           </div>
         </div>
       );

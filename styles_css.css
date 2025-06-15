@@ -1,5 +1,4 @@
 /* styles.css - Všechny CSS styly pro aplikaci */
-
 * {
   margin: 0;
   padding: 0;
@@ -37,24 +36,34 @@ body {
 }
 
 .header h1 {
-  color: #fff;                /* bílá barva */
-  text-shadow: 2px 2px 8px #000, 0 0 16px #000; /* silný stín pro čitelnost */
+  color: #fff;
+  text-shadow: 2px 2px 8px #000, 0 0 16px #000;
   font-weight: bold;
   position: relative;
   z-index: 2;
 }
 
-
-/* Content layout */
-.content {
-  padding: 40px;
+/* Layout grid */
+.content-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(450px, 1fr));
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: auto 1fr;
   gap: 30px;
+  padding: 40px;
 }
 
-/* Section styly */
-.section {
+.content-cell {
+  background: white;
+  border-radius: 15px;
+  padding: 25px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+  border: 1px solid rgba(0, 0, 0, 0.05);
+  display: flex;
+  flex-direction: column;
+}
+
+.content-row-bottom {
+  grid-column: 1 / span 2;
   background: white;
   border-radius: 15px;
   padding: 25px;
@@ -62,7 +71,9 @@ body {
   border: 1px solid rgba(0, 0, 0, 0.05);
 }
 
-.section h2 {
+/* Section heading */
+.section h2,
+.individual-checklists-title {
   color: #333;
   margin-bottom: 20px;
   font-size: 1.5em;
@@ -71,7 +82,8 @@ body {
   gap: 10px;
 }
 
-.section h2::before {
+.section h2::before,
+.individual-checklists-title::before {
   content: '';
   width: 4px;
   height: 25px;
@@ -217,7 +229,7 @@ body {
 }
 
 /* Avatar styly */
-.person-avatar {
+.person-avatar, .team-member-avatar {
   width: 48px;
   height: 48px;
   border-radius: 50%;
@@ -233,7 +245,7 @@ body {
   flex-shrink: 0;
 }
 
-.person-avatar.photo {
+.person-avatar.photo, .team-member-avatar.photo {
   background-image: var(--photo-url);
   background-size: cover;
   background-position: center;
@@ -269,25 +281,10 @@ body {
   transform: scale(1.1);
 }
 
-.edit-btn {
-  background: #007bff;
-  color: white;
-}
-
-.delete-btn {
-  background: #dc3545;
-  color: white;
-}
-
-.save-btn {
-  background: #28a745;
-  color: white;
-}
-
-.cancel-btn {
-  background: #6c757d;
-  color: white;
-}
+.edit-btn { background: #007bff; color: white; }
+.delete-btn { background: #dc3545; color: white; }
+.save-btn { background: #28a745; color: white; }
+.cancel-btn { background: #6c757d; color: white; }
 
 /* Editovací formulář */
 .edit-form {
@@ -297,13 +294,7 @@ body {
   width: 100%;
 }
 
-.edit-form input {
-  padding: 8px 12px;
-  border: 2px solid #007bff;
-  border-radius: 6px;
-  font-size: 14px;
-}
-
+.edit-form input,
 .edit-form select {
   padding: 8px 12px;
   border: 2px solid #007bff;
@@ -352,15 +343,14 @@ body {
   margin-bottom: 20px;
 }
 
-.team-section h2::before {
-  background: white;
-}
+.team-section h2::before { background: white; }
 
 .team-members {
   display: flex;
   flex-wrap: wrap;
   gap: 15px;
   margin-top: 15px;
+  justify-content: center;
 }
 
 .team-member {
@@ -377,133 +367,72 @@ body {
 
 .team-member:hover {
   background: rgba(255, 255, 255, 0.2);
-  transform: scale(3) translateY(-2px);
+  transform: scale(1.05) translateY(-2px);
   box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
 }
 
-.team-member-avatar {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #f39c12, #e67e22);
+.team-member-name { font-weight: bold; font-size: 16px; }
+
+/* --- INDIVIDUAL CHECKLIST --- */
+.individual-checklists-main {
+  margin-bottom: 25px;
+}
+.individual-checklists {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  justify-content: flex-start;
+}
+.individual-checklist {
+  background: #f8f9fa;
+  border-radius: 14px;
+  padding: 16px 18px;
+  min-width: 200px;
+  min-height: 180px;
+  box-shadow: 0 3px 12px rgba(0,0,0,0.05);
+  margin-bottom: 8px;
+  flex: 1 1 200px;
+}
+.individual-title {
   display: flex;
   align-items: center;
-  justify-content: center;
-  color: white;
+  gap: 10px;
   font-weight: bold;
-  border: 2px solid white;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+  margin-bottom: 7px;
+}
+.individual-title .reset-btn {
+  margin-left: auto;
+  font-size: 11px;
+  padding: 4px 8px;
+}
+.individual-checklist ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.individual-checklist li {
+  margin: 7px 0;
+  font-size: 15px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
 }
 
-.team-member-avatar.photo {
-  background-image: var(--photo-url);
-  background-size: cover;
-  background-position: center;
-}
-
-.team-member-name {
-  font-weight: bold;
-  font-size: 16px;
-}
+/* ---- MEDIA QUERY JEDNOU ---- */
 @media (max-width: 768px) {
-  body {
-    padding: 6px;
-  }
-  .container {
-    border-radius: 10px;
-    max-width: 99vw;
-    margin: 0 2px;
-    padding: 0;
-  }
-  .header {
-    padding: 25px 6px;
-    min-height: 120px;
-    background: url('background.jpg') center/cover;
-  }
-  .header h1 {
-    font-size: 1.4em;
-    line-height: 1.2;
-    padding: 0 4px;
-    word-break: break-word;
-  }
-  .content {
+  .content-grid {
     grid-template-columns: 1fr;
-    padding: 7px;
-    gap: 8px;
+    grid-template-rows: auto auto auto;
+    padding: 20px;
+    gap: 15px;
   }
-  .section {
-    padding: 9px 5px;
-    border-radius: 8px;
-    margin-bottom: 7px;
+  .header h1 { font-size: 2em; }
+  .section, .content-cell, .content-row-bottom {
+    padding: 15px;
+    border-radius: 10px;
   }
-  .add-item-row {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 6px;
-  }
-  .person-select {
-    font-size: 14px;
-    padding: 7px 8px;
-    border-radius: 6px;
-    min-width: 100px;
-    max-width: 100%;
-  }
-  .add-btn,
-  .action-btn {
-    padding: 8px 8px;
-    font-size: 13px;
-    border-radius: 7px;
-    min-width: 48px;
-  }
-  .stats {
-    font-size: 12px;
-    padding: 8px;
-    border-radius: 7px;
-    margin-top: 9px;
-  }
-  .progress-bar {
-    height: 5px;
-    border-radius: 3px;
-    margin: 4px 0;
-  }
-  .team-members {
-    gap: 6px;
-    margin-top: 6px;
-    flex-wrap: wrap;
-    justify-content: center;
-  }
-  .team-member {
-    padding: 4px 7px;
-    border-radius: 11px;
-    font-size: 13px;
-    gap: 5px;
-  }
-  .team-member-avatar {
-    width: 27px;
-    height: 27px;
-    font-size: 13px;
-    border-width: 1.2px;
-  }
-  .team-member-name {
-    font-size: 13px;
-  }
-  .items-list {
-    margin-bottom: 0;
-  }
-  .item {
-    padding: 7px 3px;
-    border-radius: 6px;
-    gap: 6px;
-    min-height: 44px;
-  }
-  .item-text {
-    font-size: 13px;
-  }
-  .person-avatar {
-    width: 27px;
-    height: 27px;
-    font-size: 13px;
-    border-width: 1.5px;
-    margin-bottom: 0;
-  }
+  .add-item-row { flex-direction: column; align-items: stretch; }
+  .person-select { max-width: none; }
+  .team-members { justify-content: center; }
+  .individual-checklists { flex-direction: column; }
 }
