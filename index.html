@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CS2 LAN Party Plánovač</title>
+  <link rel="stylesheet" href="styles_css.css" />
+</head>
+<body>
+  <div id="root"></div>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script type="text/babel">
+    // DATA (team members + úkoly)
+    const teamMembers = [
+      { name: 'Radim', avatar: 'R', photo: 'radimgod.jpg' },
+      { name: 'Doriman', avatar: 'D', photo: 'doriman.jpg' },
+      { name: 'Burák', avatar: 'B', photo: 'burak.jpg' },
+      { name: 'Kinigi', avatar: 'K', photo: 'kinigi.jpg' },
+      { name: 'Sejr', avatar: 'S', photo: 'sejr.jpg' }
+    ];
+
+    const initialData = {
+      buy: [
+        { id: 1, text: 'Ethernet kabely', completed: false, assignedTo: 'Radim' },
+        { id: 2, text: 'Switch/hub', completed: false, assignedTo: 'Doriman' },
+        { id: 3, text: 'Jídlo a pití', completed: false, assignedTo: 'Burák' },
+        { id: 4, text: 'Prodlužovací kabely', completed: false, assignedTo: null }
+      ],
+      solve: [
+        { id: 5, text: 'Domluvit místo konání', completed: false, assignedTo: 'Kinigi' },
+        { id: 6, text: 'Vybrat datum', completed: false, assignedTo: 'Sejr' },
+        { id: 7, text: 'Zkontrolovat internet', completed: false, assignedTo: 'Radim' },
+        { id: 8, text: 'Nastavit CS2 server', completed: false, assignedTo: null }
+      ]
+    };
+
+    // HOOKS
+    const { useState, useEffect } = React;
+    function useLanPartyData() {
+      const [items, setItems] = useState(() => {
+        if (typeof window !== 'undefined' && window.lanPartyData) {
+          try {
+            return JSON.parse(window.lanPartyData);
+          } catch (e) {}
+        }
+        return initialData;
+      });
+
+      useEffect(() => {
+        if (typeof window !== 'undefined') {
+          window.lanPartyData = JSON.stringify(items);
+        }
+      }, [items]);
+
+      const addItem = (category, text, assignedTo) => {
+        const newItem = {
+          id: Date.now(),
+          text,
+          completed: false,
+          assignedTo,
+          editing: false
+        };
+        setItems(prev => ({
+          ...prev,
+          [category]: [...prev[category], newItem]
+        }));
+      };
+
+      const toggleItem = (category, id) => {
+        setItems(prev => ({
+          ...prev,
+          [category]: prev[category].map(item =>
+            item.id === id ? { ...item, completed: !item.completed } : item
+          )
+        }));
+      };
+
+      const editItem = (category, id) => {
+        setItems(prev => ({
+          ...prev,
+          [category]: prev[category].map(item =>
+            item.id === id ? { ...item, editing: true } : item
+          )
+        }));
+      };
+
+      const saveEdit = (category, id, text, assignedTo) => {
+        setItems(prev => ({
+          ...prev,
+          [category]: prev[category].map(item =>
+            item.id === id ? { ...item, text, assignedTo, editing: false } : item
+          )
+        }));
+      };
+
+      const cancelEdit = (category, id) => {
+        setItems(prev => ({
+          ...prev,
+          [category]: prev[category].map(item =>
+            item.id === id ? { ...item, editing: false } : item
+          )
+        }));
+      };
+
+      const deleteItem = (category, id) => {
+        setItems(prev => ({
+          ...prev,
+          [category]: prev[category].filter(item => item.id !== id)
+        }));
+      };
+
+      return {
+        items,
+        addItem,
+        toggleItem,
+        editItem,
+        saveEdit,
+        cancelEdit,
+        deleteItem
+      };
+    }
+
+    // KOMPONENTY
+    function TeamMember({ member }) {
+      return (
+        <div className="team-member">
+          <div
+            className={`team-member-avatar${member.photo ? ' photo' : ''}`}
+            style={
+              member.photo
+                ? { backgroundImage: `url(${member.photo})` }
+                : undefined
+            }
+          >
+            {!member.photo && member.avatar}
+          </div>
+          <div className="team-member-name">{member.name}</div>
+        </div>
+      );
+    }
+
+    function PersonSelect({ value, onChange, id }) {
+      return (
+        <select className="person-select" value={value} onChange={onChange} id={id}>
+          <option value="">Nepřiřazeno</option>
+          {teamMembers.map(member => (
+            <option key={member.name} value={member.name}>{member.name}</option>
+          ))}
+        </select>
+      );
+    }
+
+    function PersonAvatar({ personName }) {
+      const person = teamMembers.find(member => member.name === personName);
+      if (!person) return null;
+      return (
+        <div className="item-person">
+          <div
+            className={`person-avatar${person.photo ? ' photo' : ''}`}
+            style={
+              person.photo
+                ? { backgroundImage: `url(${person.photo})` }
+                : undefined
+            }
+          >
+            {!person.photo && person.avatar}
+          </div>
+          <span>{person.name}</span>
+        </div>
+      );
+    }
+
+    function EditForm({ item, category, onSave, onCancel }) {
+      const [text, setText] = useState(item.text);
+      const [assignedTo, setAssignedTo] = useState(item.assignedTo || '');
+
+      const handleSave = () => {
+        if (text.trim()) {
+          onSave(item.id, text.trim(), assignedTo || null);
+        }
+      };
+
+      const handleKeyPress = (e) => {
+        if (e.key === 'Enter') {
+          handleSave();
+        } else if (e.key === 'Escape') {
+          onCancel(item.id);
+        }
+      };
+
+      return (
+        <div className="edit-form">
+          <input
+            type="text"
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            onKeyDown={handleKeyPress}
+            maxLength="100"
+            autoFocus
+          />
+          <PersonSelect
+            value={assignedTo}
+            onChange={(e) => setAssignedTo(e.target.value)}
+          />
+          <div className="edit-form-actions">
+            <button className="action-btn save-btn" onClick={handleSave}>
+              Uložit
+            </button>
+            <button className="action-btn cancel-btn" onClick={() => onCancel(item.id)}>
+              Zrušit
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    function ListItem({ item, category, onToggle, onEdit, onDelete, onSaveEdit, onCancelEdit }) {
+      return (
+        <li className={`item${item.completed ? ' completed' : ''}`}>
+          <input
+            type="checkbox"
+            checked={item.completed}
+            onChange={() => onToggle(item.id)}
+            disabled={item.editing}
+          />
+          <div className="item-content">
+            {item.editing ? (
+              <EditForm
+                item={item}
+                category={category}
+                onSave={onSaveEdit}
+                onCancel={onCancelEdit}
+              />
+            ) : (
+              <>
+                <span className="item-text">{item.text}</span>
+                {item.assignedTo && <PersonAvatar personName={item.assignedTo} />}
+              </>
+            )}
+          </div>
+          <div className="item-actions">
+            {!item.editing && (
+              <>
+                <button className="action-btn edit-btn" onClick={() => onEdit(item.id)}>
+                  Upravit
+                </button>
+                <button className="action-btn delete-btn" onClick={() => onDelete(item.id)}>
+                  Smazat
+                </button>
+              </>
+            )}
+          </div>
+        </li>
+      );
+    }
+
+    function AddItemForm({ category, onAdd }) {
+      const [text, setText] = useState('');
+      const [assignedTo, setAssignedTo] = useState('');
+
+      const handleSubmit = () => {
+        if (text.trim()) {
+          onAdd(category, text.trim(), assignedTo || null);
+          setText('');
+          setAssignedTo('');
+        }
+      };
+
+      const handleKeyPress = (e) => {
+        if (e.key === 'Enter') {
+          handleSubmit();
+        }
+      };
+
+      return (
+        <div className="add-item">
+          <div className="add-item-row">
+            <input
+              type="text"
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              onKeyDown={handleKeyPress}
+              placeholder={category === 'buy' ? 'Přidat položku k sehnání...' : 'Přidat úkol k vyřešení...'}
+              maxLength="100"
+            />
+            <PersonSelect
+              value={assignedTo}
+              onChange={(e) => setAssignedTo(e.target.value)}
+            />
+            <button className="add-btn" onClick={handleSubmit}>
+              Přidat
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    function ProgressStats({ items }) {
+      const total = items.length;
+      const completed = items.filter(item => item.completed).length;
+      const percentage = total > 0 ? (completed / total) * 100 : 0;
+      return (
+        <div className="stats">
+          <div>Dokončeno: {completed} / {total}</div>
+          <div className="progress-bar">
+            <div className="progress-fill" style={{ width: `${percentage}%` }}></div>
+          </div>
+        </div>
+      );
+    }
+
+    function ListSection({ title, emoji, category, items, onAdd, onToggle, onEdit, onDelete, onSaveEdit, onCancelEdit }) {
+      return (
+        <div className="section">
+          <h2>{emoji} {title}</h2>
+          <AddItemForm category={category} onAdd={onAdd} />
+          <ul className="items-list">
+            {items.map(item => (
+              <ListItem
+                key={item.id}
+                item={item}
+                category={category}
+                onToggle={onToggle}
+                onEdit={onEdit}
+                onDelete={onDelete}
+                onSaveEdit={onSaveEdit}
+                onCancelEdit={onCancelEdit}
+              />
+            ))}
+          </ul>
+          <ProgressStats items={items} />
+        </div>
+      );
+    }
+
+    function CS2LanPlanner() {
+      const {
+        items,
+        addItem,
+        toggleItem,
+        editItem,
+        saveEdit,
+        cancelEdit,
+        deleteItem
+      } = useLanPartyData();
+
+      return (
+        <div className="container">
+          <div className="header">
+            <h1>CS2 LAN Party Plánovač</h1>
+          </div>
+          <div className="content">
+            <div className="section team-section">
+              <h2>👥 Tým</h2>
+              <div className="team-members">
+                {teamMembers.map(member => (
+                  <TeamMember key={member.name} member={member} />
+                ))}
+              </div>
+            </div>
+            <ListSection
+              title="Věci k sehnání/koupení"
+              emoji="🛍️"
+              category="buy"
+              items={items.buy}
+              onAdd={addItem}
+              onToggle={id => toggleItem('buy', id)}
+              onEdit={id => editItem('buy', id)}
+              onDelete={id => deleteItem('buy', id)}
+              onSaveEdit={(id, text, assignedTo) => saveEdit('buy', id, text, assignedTo)}
+              onCancelEdit={id => cancelEdit('buy', id)}
+            />
+            <ListSection
+              title="Věci k vyřešení/zjištění"
+              emoji="📋"
+              category="solve"
+              items={items.solve}
+              onAdd={addItem}
+              onToggle={id => toggleItem('solve', id)}
+              onEdit={id => editItem('solve', id)}
+              onDelete={id => deleteItem('solve', id)}
+              onSaveEdit={(id, text, assignedTo) => saveEdit('solve', id, text, assignedTo)}
+              onCancelEdit={id => cancelEdit('solve', id)}
+            />
+          </div>
+        </div>
+      );
+    }
+
+    // START APP
+    const root = ReactDOM.createRoot(document.getElementById("root"));
+    root.render(<CS2LanPlanner />);
+  </script>
+</body>
+</html>
