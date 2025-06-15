@@ -44,7 +44,8 @@
       { label: "Klávesnice", key: "klavesnice" },
       { label: "Podložka", key: "podlozka" },
       { label: "Monitor", key: "monitor" },
-      { label: "PC", key: "pc" }
+      { label: "PC", key: "pc" },
+      { label: "Plavky", key: "plavky" }
     ];
 
     const initialData = {
@@ -583,7 +584,7 @@
               onRestoreItem={restoreDefaultItem}
             />
             <ListSection
-              title="Věci k sehnání/koupení"
+              title="Věci ke koupení"
               emoji="🛍️"
               category="buy"
               items={items.buy}
@@ -595,7 +596,7 @@
               onCancelEdit={id => cancelEdit('buy', id)}
             />
             <ListSection
-              title="Věci k vyřešení/zjištění"
+              title="Věci k zjištění"
               emoji="📋"
               category="solve"
               items={items.solve}
